@@ -1,0 +1,17 @@
+* dVbe temperature sensor: sweep temperature, plot dVbe (extracted layout netlist)
+.include /Users/ytr0/pdk/TR-1um/libs.tech/spice/models/ip62_models
+.include /Users/ytr0/projects/tr1um-xschem/postlayout/ytr0_top_full.sim.spice
+I1 0 t1 10u
+I8 0 t8 10u
+Vdd vdd 0 5
+Va a 0 0
+X1 a q t1 t8 vdd 0 ytr0_top
+.control
+set temp = 27
+dc temp -20 100 2
+settype voltage v(t1) v(t8)
+let dvbe = (v(t1) - v(t8)) * 1000
+plot dvbe xlabel 'Temperature [C]' ylabel 'dVbe [mV]' title 'ytr0_tempsens: dVbe = 0.193 mV/C'
+plot v(t1) v(t8) xlabel 'Temperature [C]' ylabel 'Vbe [V]'
+.endc
+.end

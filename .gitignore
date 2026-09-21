@@ -6,7 +6,9 @@ postlayout/*.lvsdb
 postlayout/*.log
 postlayout/*.dat
 postlayout/*.raw
-postlayout/tb_*.spice
+postlayout/tb_layout.spice
+postlayout/tb_schematic.spice
+postlayout/*.sim.spice
 postlayout/inverter.spice
 postlayout/inverter.extracted*.spice
 *.extracted
