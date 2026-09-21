@@ -23,7 +23,7 @@ for v in $variants; do
   print ">> DRC"
   klayout.sh -zz -c $HOME/.klayout/klayoutrc -r $PDK_T/klayout/tech/drc/run.drc \
     -rd input=$D/ytr0_top.gds -rd report=$D/drc.lyrdb > $D/drc.log 2>&1 || true
-  print "   violations: $(grep -c '<item>' $D/drc.lyrdb || print '?')"
+  print "   violations: $( { grep -c '<item>' $D/drc.lyrdb || true; } | head -1 )"
 
   print ">> LVS"
   klayout.sh -zz -c $HOME/.klayout/klayoutrc -r $PDK_T/klayout/tech/lvs/run.lvs \

@@ -85,6 +85,17 @@ cd variants/full && klayout.sh -n TR-1um ytr0_top.gds
 >> LVS       INFO : Congratulations! Netlists match.
 ```
 
+## 渡すときは zip で
+
+```sh
+./check.sh        # 先に DRC と LVS を通す
+./deliver.sh      # deliver/ytr0_top_{inverter_only,full}.zip ができる
+```
+
+zip の中身は GDS、LVS 用ネットリスト、回路図、DRC と LVS の結果、`MANIFEST.txt`（md5 と検証結果）、
+それに `PINLIST.md`（ピンの説明書）です。
+DRC が 0 件かつ LVS が一致していないと、`deliver.sh` は途中で止まります。
+
 ## SRAM の使い方
 
 インバータを2個たすきがけにしたラッチに、トランスミッションゲートで外からつなぎます。
@@ -120,6 +131,8 @@ NMOS のパストランジスタ1個では 1 を書き込めません（しき�
 | `variants/*/ytr0_top.gds` | トップのレイアウト |
 | `layout/gen_layout.py` | レイアウトを作るスクリプト（`-rd variant=full`） |
 | `check.sh` | 各バリアントの DRC と LVS |
+| `deliver.sh` | 渡す zip を作る |
+| `PINLIST.md` | 発注担当に渡すピンの説明書 |
 | `sim.sch` | インバータの DC 特性を見るテストベンチ |
 | `main.sch` | 新しく設計を始めるときの雛形 |
 | `postlayout/run.sh` | インバータ単体の検証（DRC → LVS → シミュレーション比較） |
