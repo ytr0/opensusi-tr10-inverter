@@ -12,3 +12,9 @@ postlayout/inverter.extracted*.spice
 *.extracted
 *.bak
 *.bak-*
+variants/*/drc.lyrdb
+variants/*/lvs.lvsdb
+variants/*/*.log
+variants/*/*.extracted
+variants/*/simulation/
+layout/*.orig

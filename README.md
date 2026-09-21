@@ -29,7 +29,9 @@ PMOS の W は、しきい値電圧が VDD/2 になり、かつ立ち上がり�
 | `main.sch` | 新規設計用の雛形（モデル読み込み + シミュレーション設定のブロックのみ） |
 | `inverter.gds` | レイアウト。トップセル名 `inverter`、シリコンアート `art_ytr0` を含む |
 | `postlayout/gen_inverter_layout.py` | レイアウトを生成する KLayout スクリプト（PCell を配置し、N ウェルの寸法はルールから逆算） |
-| `postlayout/run.sh` | DRC → LVS → 回路図とレイアウトのシミュレーション比較を通しで実行 |
+| `postlayout/run.sh` | 単体インバータの DRC → LVS → シミュレーション比較 |
+| `layout/gen_layout.py` | バリアント別のレイアウト生成（`-rd variant=full`） |
+| `check.sh` | 全バリアントの レイアウト生成 → DRC → LVS |
 
 ## 使い方
 PDK のセットアップは [ishi-kai/OpenEDA-PDK_SetupScript](https://github.com/ishi-kai/OpenEDA-PDK_SetupScript) を参照。
@@ -56,6 +58,42 @@ postlayout/run.sh
 >> 3.  schematic   Vinv=2.49807e+00  VOH=5.00000e+00  VOL=1.89753e-08
         layout      Vinv=2.49807e+00  VOH=5.00000e+00  VOL=1.89753e-08
 ```
+
+## バリアント（発注担当に渡すもの）
+追加パッドがもらえるかどうかで、**ファイルを差し替えるだけ**で済むように 2 つ用意してある。
+トップセル名はどちらも `ytr0_top`。相手が GDS を編集する必要はない。
+
+| バリアント | 内容 | ピン | 場所 |
+|---|---|---|---|
+| `inverter_only` | インバータ + シリコンアート | A, Q, VDD, VSS | `variants/inverter_only/ytr0_top.gds` |
+| `full` | 上記 + 温度センサ | 上記 + TEMP1, TEMP8 | `variants/full/ytr0_top.gds` |
+
+どちらも DRC 違反 0 件、LVS 一致。LVS 用ネットリストは各 `variants/<名前>/simulation/ytr0_top.spice`。
+
+```sh
+./check.sh            # 両方を レイアウト生成 -> DRC -> LVS
+./check.sh full       # 片方だけ
+```
+
+### 温度センサ（ytr0_tempsens）
+- DP ダイオード（P+ in N-well）を 9 個一列に並べた ΔVbe 方式。中央 1 個が TEMP1、両側 8 個を並列にして TEMP8。
+  1 次元のコモンセントロイド配置で、ウェハ上の勾配の影響を打ち消す。
+- N ウェルが共通カソードで、VSS に落としている。**VDD は使わない**。
+- 上面は浮いた M2 で覆って遮光してある（パッケージに光が入っても影響しない）。
+- 測り方: TEMP1 と TEMP8 に同じ電流（10µA 程度）を流し、電圧差 ΔVbe を読む。25℃ で約 58mV、感度 +0.193mV/℃。
+  ダイオード単体の順方向電圧と違い、製造ばらつき（飽和電流が 2 倍ずれても）で値が変わらない。
+- 電流源は 1 つを 2 つのピンに切り替えて使うのが確実（別々の電流源だと 1% の差で約 1.3℃ の誤差）。
+
+### 構造（センサだけ消せるようにしてある）
+```
+ytr0_top
+├── ytr0_inverter  (A, Q, VDD, VSS)
+├── ytr0_tempsens  (TEMP1, TEMP8, VSS)   ← full のみ
+└── art_ytr0       (M2 のアート、配線なし)
+```
+- 電源レールは `ytr0_top` 側にあるので、`ytr0_tempsens` の配置を消してもインバータの電源は切れない。
+- ピンのラベル TEMP1 / TEMP8 はセンサのセルの中にあるので、セルを消せば一緒に消える。
+- ただし通常は、`inverter_only` の GDS に差し替えてもらうのが確実。
 
 ## この PDK で詰まった点
 - **LVS が読む回路図のパス**: KLayout の LVS は、レイアウトファイルと同じディレクトリの
