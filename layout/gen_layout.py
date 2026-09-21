@@ -10,7 +10,7 @@ import pya
 
 ly = pya.Layout(); ly.technology_name = "TR-1um"; ly.dbu = 0.001
 L = lambda a, b: ly.layer(a, b)
-M1, M2, V1, GC, WN, AP, TXM1, TXM2 = L(13, 0), L(20, 0), L(19, 0), L(8, 1), L(140, 0), L(3, 1), L(48, 0), L(49, 0)
+M1, M2, V1, GC, WN, AP, TXM1, TXM2, PRB = L(13, 0), L(20, 0), L(19, 0), L(8, 1), L(140, 0), L(3, 1), L(48, 0), L(49, 0), L(235, 0)
 
 def inst(cell, name, x, y, p={}):
     c = ly.create_cell(name, "TR-1um", p); assert c, name
@@ -145,32 +145,60 @@ def build_art(text, px=3.0):               # M2 幅 3.0 / 間隔 2.0 を満た�
     return c
 
 # ---------------------------------------------------------------- top
-# variant = "inverter_only" | "full"(= inverter + SRAM) | "sram_only"(SRAM 単体の検証用)
+# variant = "inverter_only" | "full"(= inverter + SRAM) | "sram_only"
+# 外部接続の方針:
+#   - 信号は 5um 角のパッドでブロックの外周に出す（作業者が迷わないように）
+#   - Q と WORD は電源レールを M1 でまたげないので M2 で下へ抜く
+#   - VDD / VSS のレールは左右の端まで伸ばす（他ブロックと共有して数珠つなぎにできる）
+#   - prBoundary でブロックの範囲を示す
+PAD = 2.5                                   # パッドは 5um 角
+
+def port_m1(cell, name, x, y):
+    box(cell, x - PAD, y - PAD, x + PAD, y + PAD, M1); label(cell, name, x, y)
+def port_m2(cell, name, x, y):
+    box(cell, x - PAD, y - PAD, x + PAD, y + PAD, M2); label(cell, name, x, y, TXM2)
+def m1_to_m2(cell, x, y):                   # V1 + 上下の 3.4 角パッド
+    box(cell, x - 1.7, y - 1.7, x + 1.7, y + 1.7, M1)
+    box(cell, x - 0.7, y - 0.7, x + 0.7, y + 0.7, V1)
+    box(cell, x - 1.7, y - 1.7, x + 1.7, y + 1.7, M2)
+
 variant = variant if "variant" in dir() else "full"
 assert variant in ("inverter_only", "full", "sram_only"), variant
 top = ly.create_cell("ytr0_top")
+XL, YBOT = -20.0, -36.0                     # 左端 / 下端のパッド位置
 
 if variant == "sram_only":
     sr = build_sram()
     top.insert(pya.DCellInstArray(sr.cell_index(), pya.DTrans(0, 0)))
-    for t, x, y in (("DATA", 71.5, -15.0), ("VDD", -17.0, 8.0), ("VSS", -17.0, -29.0)):
-        label(top, t, x, y)
-    label(top, "WORD", -13.5, -15.0, TXM2)
+    XR = 88.0
+    path(top, [(71.5, -15.0), (XR, -15.0)], 1.8); port_m1(top, "DATA", XR, -15.0)
+    path(top, [(-12.5, -15.0), (-12.5, YBOT)], 3.0, M2); port_m2(top, "WORD", -12.5, YBOT)
+    for nm, yy in (("VDD", 8.0), ("VSS", -29.0)):
+        path(top, [(XL, yy), (XR, yy)], 2.6)
+        port_m1(top, nm, XL, yy); port_m1(top, nm, XR, yy)   # 左右どちらからでもつなげる（名前は同じ）
 else:
     inv = build_inverter()
     top.insert(pya.DCellInstArray(inv.cell_index(), pya.DTrans(0, 0)))
     top.insert(pya.DCellInstArray(build_art("ytr0").cell_index(), pya.DTrans(16.0, -20.0)))
-    for t, x, y in (("A", -9.5, -15.0), ("Q", 9.5, -15.0), ("VDD", -9.5, 8.0), ("VSS", -9.5, -29.0)):
-        label(top, t, x, y)
+    XR = 88.0
     if variant == "full":
-        SX = 110.0                       # SRAM はインバータの右隣（レールが一直線になる位置）
+        SX = 110.0
         sr = build_sram()
         top.insert(pya.DCellInstArray(sr.cell_index(), pya.DTrans(SX, 0.0)))
-        # 電源レールをつなぐ（top 側の配線。SRAM を消してもインバータ側は残る）
-        path(top, [(8.0, 8.0), (SX - 18.0, 8.0)], 2.6)
-        path(top, [(8.0, -29.0), (SX - 18.0, -29.0)], 2.6)
-        label(top, "DATA", SX + 71.5, -15.0)
-        label(top, "WORD", SX - 13.5, -15.0, TXM2)
+        XR = SX + 76.0
+        path(top, [(SX + 71.5, -15.0), (XR, -15.0)], 1.8); port_m1(top, "DATA", XR, -15.0)
+        path(top, [(SX - 12.5, -15.0), (SX - 12.5, YBOT)], 3.0, M2)   # 横配線の端に合わせる（角の欠け対策）
+        port_m2(top, "WORD", SX - 12.5, YBOT)
+    # A: 左へ / Q: M2 で下へ
+    path(top, [(-10.0, -15.0), (XL, -15.0)], 1.8); port_m1(top, "A", XL, -15.0)
+    m1_to_m2(top, 10.0, -15.0)
+    path(top, [(10.0, -15.0), (10.0, YBOT)], 3.0, M2); port_m2(top, "Q", 10.0, YBOT)
+    # 電源レール: 左右の端まで通す（共有しやすいように両端にパッド）
+    for nm, yy in (("VDD", 8.0), ("VSS", -29.0)):
+        path(top, [(XL, yy), (XR, yy)], 2.6)
+        port_m1(top, nm, XL, yy); port_m1(top, nm, XR, yy)   # 左右どちらからでもつなげる（名前は同じ）
 
+bb = top.dbbox()
+top.shapes(PRB).insert(pya.DBox(bb.left - 1, bb.bottom - 1, bb.right + 1, bb.top + 1))
 ly.write(out)
 print("WROTE %s variant=%s top=%s bbox=%s" % (out, variant, top.name, top.dbbox()))
