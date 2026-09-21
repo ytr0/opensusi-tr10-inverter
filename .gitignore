@@ -1,0 +1,14 @@
+# 生成物（postlayout/run.sh を実行すれば再生成される）
+backups/
+simulation/
+postlayout/*.lyrdb
+postlayout/*.lvsdb
+postlayout/*.log
+postlayout/*.dat
+postlayout/*.raw
+postlayout/tb_*.spice
+postlayout/inverter.spice
+postlayout/inverter.extracted*.spice
+*.extracted
+*.bak
+*.bak-*
