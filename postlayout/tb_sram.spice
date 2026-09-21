@@ -1,0 +1,21 @@
+* 1-bit SRAM: 書き込み(1) -> 保持 -> 読み出し(10pF のパッドへ)
+.include /Users/ytr0/pdk/TR-1um/libs.tech/spice/models/ip62_models
+.include /Users/ytr0/projects/tr1um-xschem/postlayout/ytr0_sram.sim.spice
+Vdd vdd 0 5
+* DATA: 0-10us は書き込み駆動(5V)、その後は開放（10Meg で浮かせる）
+Vdrv drv 0 PWL(0 5 10u 5)
+Sw drv data ctl 0 swmod
+.model swmod SW vt=2.5 ron=10 roff=1e12
+Vctl ctl 0 PWL(0 5 10u 5 10.1u 0)
+Rleak data 0 10Meg
+Cpad data 0 10p
+* WORD: 1-5us 書き込み、30-60us 読み出し
+Vword word 0 PWL(0 0 1u 0 1.05u 5 5u 5 5.05u 0 30u 0 30.05u 5 60u 5)
+X1 data word vdd 0 ytr0_top
+.ic v(X1.X1.Q)=0 v(X1.X1.QB)=5 v(data)=0
+.tran 20n 60u uic
+.control
+run
+plot v(word) v(data) v(X1.X1.Q) xlabel 'time [s]' ylabel 'V' title '1-bit SRAM: write 1 -> hold -> read'
+.endc
+.end

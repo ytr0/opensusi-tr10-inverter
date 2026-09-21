@@ -10,7 +10,7 @@ import pya
 
 ly = pya.Layout(); ly.technology_name = "TR-1um"; ly.dbu = 0.001
 L = lambda a, b: ly.layer(a, b)
-M1, M2, GC, WN, AP, TXM1 = L(13, 0), L(20, 0), L(8, 1), L(140, 0), L(3, 1), L(48, 0)
+M1, M2, V1, GC, WN, AP, TXM1, TXM2 = L(13, 0), L(20, 0), L(19, 0), L(8, 1), L(140, 0), L(3, 1), L(48, 0), L(49, 0)
 
 def inst(cell, name, x, y, p={}):
     c = ly.create_cell(name, "TR-1um", p); assert c, name
@@ -77,6 +77,54 @@ def build_tempsens():
     box(c, bb.left, -d / 2 - 2, bb.right, d / 2 + 2, M2)   # 遮光板（浮き M2, V1 なし）
     return c
 
+
+# ---------------------------------------------------------------- 1-bit SRAM
+# 列: invA(0) invB(20) wordINV(40) TG(60)   PMOS y=0 / NMOS y=-23
+# 交差する配線は M2 に逃がす: WORDB(y=-3.5) Q(y=-10) WORD(y=-15)
+# TG のゲートはポリを横に振って、拡散から離れた場所にコンタクトを置く
+def build_sram():
+    c = ly.create_cell("ytr0_sram")
+    yP, yN, yVDD, yVSS = 0.0, -23.0, 8.0, -29.0
+    A, B, W, T = 0.0, 20.0, 40.0, 60.0
+    def fets(x):
+        inst(c, "fet_p", x, yP, {"w": 8.2, "l": 1.0}); inst(c, "fet_n", x, yN, {"w": 3.4, "l": 1.0})
+    def inverter_at(x):
+        fets(x)
+        path(c, [(x, yP - 5.3), (x, yN + 2.9)], 1.0, GC)
+        inst(c, "cont_g", x, -15.0)
+        path(c, [(x + 2.0, yP), (x + 4.2, yP), (x + 4.2, yN), (x + 2.0, yN)], 1.8)
+        path(c, [(x - 2.0, yP), (x - 2.0, yVDD)], 1.8)
+        path(c, [(x - 2.0, yN), (x - 2.0, yVSS)], 1.8)
+    def via(x, y):
+        box(c, x - 1.7, y - 1.7, x + 1.7, y + 1.7, M1)
+        box(c, x - 0.7, y - 0.7, x + 0.7, y + 0.7, V1)
+        box(c, x - 1.7, y - 1.7, x + 1.7, y + 1.7, M2)
+    for x in (A, B, W):
+        inverter_at(x)
+    fets(T)                                                     # transmission gate
+    path(c, [(T, yP - 5.3), (T, -7.0), (50.0, -7.0)], 1.0, GC); inst(c, "cont_g", 50.0, -7.0)    # PMOS gate = WORDB
+    path(c, [(T, yN + 2.9), (T, -19.0), (49.0, -19.0)], 1.0, GC); inst(c, "cont_g", 49.0, -19.0) # NMOS gate = WORD
+    path(c, [(T - 2.0, yP), (T - 4.2, yP), (T - 4.2, yN), (T - 2.0, yN)], 1.8)                   # 左 S/D = Q
+    path(c, [(T + 2.0, yP), (T + 6.0, yP), (T + 6.0, yN), (T + 2.0, yN)], 1.8)                   # 右 S/D = DATA
+    path(c, [(T + 6.0, -15.0), (T + 12.0, -15.0)], 1.8); label(c, "DATA", T + 11.5, -15.0)
+    path(c, [(A + 4.2, -19.0), (B, -19.0), (B, -15.0)], 1.8)                                     # QB (M1)
+    via(B + 4.2, -9.5); via(T - 4.2, -9.5); via(A - 8.0, -9.5)                                # Q (M2)
+    path(c, [(A - 8.0, -9.5), (T - 4.2, -9.5)], 3.0, M2)
+    path(c, [(A - 8.0, -9.5), (A - 8.0, -15.0), (A, -15.0)], 1.8)
+    path(c, [(W, -15.0), (34.0, -15.0)], 1.8); via(34.0, -15.0)                                  # WORD (M2)
+    box(c, 47.3, -20.3, 50.7, -13.3, M1); via(49.0, -15.0)          # コンタクトとビアを 1 枚の M1 でつなぐ
+    path(c, [(A - 14.0, -15.0), (49.0, -15.0)], 3.0, M2); label(c, "WORD", A - 13.5, -15.0, TXM2)
+    via(W + 4.2, -3.5); via(50.0, -3.5)                                                          # WORDB (M2)
+    path(c, [(W + 4.2, -3.5), (50.0, -3.5)], 3.0, M2)
+    box(c, 48.3, -8.3, 51.7, -1.8, M1)
+    xl, xr = A - 18.0, T + 12.0
+    path(c, [(xl, yVDD), (xr, yVDD)], 2.6); inst(c, "cont_n", xl + 2.0, yVDD); label(c, "VDD", xl + 1.0, yVDD)
+    path(c, [(xl, yVSS), (xr, yVSS)], 2.6); inst(c, "cont_p", xl + 2.0, yVSS); label(c, "VSS", xl + 1.0, yVSS)
+    tie = pya.DBox(xl + 0.7, yVDD - 1.3, xl + 3.3, yVDD + 1.3)
+    box(c, min(A - 3.3 - 7, tie.left - 5), min(yP - 4.1 - 7, tie.bottom - 5),
+           max(T + 3.3 + 7, tie.right + 5), max(yP + 4.1 + 7, tie.top + 5), WN)
+    return c
+
 # ---------------------------------------------------------------- silicon art
 GLYPHS = {
  "y": ["#...#", "#...#", "#...#", "#####", "....#", "....#", "#####"],
@@ -97,24 +145,32 @@ def build_art(text, px=3.0):               # M2 幅 3.0 / 間隔 2.0 を満た�
     return c
 
 # ---------------------------------------------------------------- top
+# variant = "inverter_only" | "full"(= inverter + SRAM) | "sram_only"(SRAM 単体の検証用)
 variant = variant if "variant" in dir() else "full"
-assert variant in ("inverter_only", "full"), variant
+assert variant in ("inverter_only", "full", "sram_only"), variant
 top = ly.create_cell("ytr0_top")
-inv = build_inverter()
-top.insert(pya.DCellInstArray(inv.cell_index(), pya.DTrans(0, 0)))
-top.insert(pya.DCellInstArray(build_art("ytr0").cell_index(), pya.DTrans(16.0, -20.0)))
-# トップセルのラベル = LVS のピン（子セル内のラベルは top のピンにならない）
-for t, x, y in (("A", -9.5, -15.0), ("Q", 9.5, -15.0), ("VDD", -9.5, 8.0), ("VSS", -9.5, -29.0)):
-    label(top, t, x, y)
-if variant == "full":
-    ts = build_tempsens()
-    # インバータの右下に配置（重なりなし・ウェル同士も離す）
-    top.insert(pya.DCellInstArray(ts.cell_index(), pya.DTrans(60.0, -70.0)))
-    # VSS レール（top 側に置く。ytr0_tempsens を消してもここは残る）
-    # 温度センサは VDD を使わない（N ウェル = 共通カソードを VSS に落とすだけ）
-    xv, yv = 60.0 + TS_VSS_X, -70.0 + TS_VSS_Y     # センサの VSS 引き出し線の端
-    path(top, [(-10.0, -29.0), (xv, -29.0), (xv, yv)], 2.6)
-    label(top, "TEMP1", 60.0 + TS_T1_X, -70.0 + TS_T1_Y)
-    label(top, "TEMP8", 60.0 + TS_T8_X, -70.0 + TS_T8_Y)
+
+if variant == "sram_only":
+    sr = build_sram()
+    top.insert(pya.DCellInstArray(sr.cell_index(), pya.DTrans(0, 0)))
+    for t, x, y in (("DATA", 71.5, -15.0), ("VDD", -17.0, 8.0), ("VSS", -17.0, -29.0)):
+        label(top, t, x, y)
+    label(top, "WORD", -13.5, -15.0, TXM2)
+else:
+    inv = build_inverter()
+    top.insert(pya.DCellInstArray(inv.cell_index(), pya.DTrans(0, 0)))
+    top.insert(pya.DCellInstArray(build_art("ytr0").cell_index(), pya.DTrans(16.0, -20.0)))
+    for t, x, y in (("A", -9.5, -15.0), ("Q", 9.5, -15.0), ("VDD", -9.5, 8.0), ("VSS", -9.5, -29.0)):
+        label(top, t, x, y)
+    if variant == "full":
+        SX = 110.0                       # SRAM はインバータの右隣（レールが一直線になる位置）
+        sr = build_sram()
+        top.insert(pya.DCellInstArray(sr.cell_index(), pya.DTrans(SX, 0.0)))
+        # 電源レールをつなぐ（top 側の配線。SRAM を消してもインバータ側は残る）
+        path(top, [(8.0, 8.0), (SX - 18.0, 8.0)], 2.6)
+        path(top, [(8.0, -29.0), (SX - 18.0, -29.0)], 2.6)
+        label(top, "DATA", SX + 71.5, -15.0)
+        label(top, "WORD", SX - 13.5, -15.0, TXM2)
+
 ly.write(out)
 print("WROTE %s variant=%s top=%s bbox=%s" % (out, variant, top.name, top.dbbox()))

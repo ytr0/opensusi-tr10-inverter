@@ -4,7 +4,7 @@
 set -e
 P=${0:A:h}
 PDK_T=$PDK_ROOT/$PDK/libs.tech
-if (( $# )); then variants=($@); else variants=(inverter_only full); fi
+if (( $# )); then variants=($@); else variants=(inverter_only full sram_only); fi
 
 for v in $variants; do
   D=$P/variants/$v
